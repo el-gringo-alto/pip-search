@@ -9,7 +9,9 @@ from bs4 import BeautifulSoup, SoupStrainer
 
 
 
-pypi_params = {
+# add different params for the PyPI search to get different kinds of results
+# this should allow us to get more packages when scraping
+_pypi_params = {
     'relevance': {
         'q': '',
         'o': '',
@@ -21,8 +23,30 @@ pypi_params = {
 
 def _get_soup(link, params={}, strainer=None):
     with requests.get(link, params=params) as req:
-        req.raise_for_status()
-        return BeautifulSoup(req.text, 'lxml', parse_only=strainer)
+        if req.status_code < 400:
+            return BeautifulSoup(req.text, 'lxml', parse_only=strainer)
+        else:
+            return None
+
+
+
+class Package:
+    """docstring for Package."""
+
+    def __init__(self, name):
+        self.name = name
+        soup = _get_soup(f"https://pypi.org/project/{self.name}/", strainer=SoupStrainer(id='content'))
+        # pathlib.Path(f"{self.name}.html").write_text(soup.prettify())
+        if soup == None:
+            print(f"{self.name} doesn't exist.")
+            del self
+
+        def _soup_text(**kwargs):
+            return soup.find(**kwargs).get_text()
+
+        self.pip_command = _soup_text(id='pip-command')
+        self.summary = _soup_text(class_='package-description__summary')
+        self.description = _soup_text(class_='project-description')
 
 
 
@@ -32,7 +56,7 @@ class PyPI:
         self.packages_file = pathlib.Path(packages_file)
         # search results only go to 500 pages
         self.pages_to_get = pages_to_get
-        if self.pages_to_get > 500 or self.pages_to_get < 0:
+        if self.pages_to_get < 0 or self.pages_to_get > 500:
             raise ValueError(f"PyPI search results can only go up to 500 pages. Please specify a number between 0 and 500.")
 
         self.packages = []
@@ -55,25 +79,13 @@ class PyPI:
         else:
             self.packages = json.loads(self.packages_file.read_text())
 
-
-
-    def search(self, p_name):
-        if p_name not in self.packages:
-            raise IndexError(f"{p_name} is not in the list of PyPI packages.")
-
-        soup = _get_soup(f"https://pypi.org/project/{p_name}/", strainer=SoupStrainer(id='content'))
-
-        def soup_text(**args):
-            return soup.find(**args).get_text()
-
-        return {
-            'package-name': p_name,
-            'pip-command': soup_text(id='pip-command'),
-            'description': soup_text(class_='package-description__summary')
-        }
-
-
-
     def random(self):
         package_name = random.choice(self.packages)
-        return self.search(package_name)
+        return Package(package_name)
+
+    def search(self, name):
+        if (name not in self.packages and
+            (package := Package(name)) is not None):
+            self.packages.append(name)
+            self.packages_file.write_text(json.dumps(self.packages))
+            return package
