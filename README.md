@@ -15,21 +15,19 @@ import pipsearch
 pypi = pipsearch.PyPI()
 
 # get a specific package
-package = pypi.search('markovify')
+package = pypi.search('requests')
+
+# output the package data
+print(package.name) # requests
+print(package.pip_command) # pip install requests
+print(package.summary) # Python HTTP for Humans.
 
 # get a random package
 package = pypi.random()
-
-# print the package object
-print(f"""
-Package: {package['package-name']}
-
-Pip command: {package['pip-command']}
-
-{package['description']}""")
 ```
 
 ## TODO
 * Add more information to return about the packages
+    * Add Github repository data
 * Add more search queries to get more packages
 * Add command-line arguments
